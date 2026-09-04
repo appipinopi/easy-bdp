@@ -214,6 +214,26 @@ export class CollabManager {
             console.warn('Failed to backup initial workspace before join:', e);
         }
 
+        // Clear local blocks and preview code upon joining
+        try {
+            this.isApplyingRemote = true;
+            if (this.workspace) {
+                this.workspace.clear();
+            }
+            const liveCodeOutput = document.getElementById('codePreviewContent');
+            if (liveCodeOutput) {
+                liveCodeOutput.textContent = '# ホストのコードを読み込み中...';
+            }
+            const codeOutput = document.getElementById('codeOutput');
+            if (codeOutput) {
+                codeOutput.textContent = '';
+            }
+        } catch (e) {
+            console.warn('Failed to clear workspace on join:', e);
+        } finally {
+            this.isApplyingRemote = false;
+        }
+
         this.isHost = false;
         this.roomId = cleanRoomId;
         this.myUser.isHost = false;
@@ -444,6 +464,19 @@ export class CollabManager {
                     }
                 });
             }
+
+            // Refresh live code preview after host workspace loaded
+            try {
+                const liveCodeOutput = document.getElementById('codePreviewContent');
+                if (liveCodeOutput && typeof Blockly.Python !== 'undefined') {
+                    liveCodeOutput.textContent = Blockly.Python.workspaceToCode(this.workspace);
+                    delete liveCodeOutput.dataset.highlighted;
+                    if (window.hljs) window.hljs.highlightElement(liveCodeOutput);
+                }
+            } catch (err) {
+                console.warn('Failed to refresh code preview after full sync:', err);
+            }
+
             this.notify('users_updated', this.getAllUsers());
             this.notify('info', { message: 'ワークスペースの同期が完了しました。' });
         } catch (err) {

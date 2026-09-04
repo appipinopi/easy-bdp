@@ -129,6 +129,7 @@ export class CollabUI {
 
         // Disconnect
         this.elements.disconnectBtn?.addEventListener('click', () => {
+            this.removeCollabUrlParam();
             this.manager.disconnect();
             this.showToast('共同編集を切断しました', 'info');
         });
@@ -138,6 +139,9 @@ export class CollabUI {
             switch (type) {
                 case 'status_change':
                     this.updateViewByStatus(data.status);
+                    if (data.status === 'disconnected') {
+                        this.removeCollabUrlParam();
+                    }
                     break;
                 case 'users_updated':
                     this.renderUsers(data);
@@ -173,6 +177,7 @@ export class CollabUI {
     }
 
     async promptHostDisconnected(data) {
+        this.removeCollabUrlParam();
         let shouldKeep = true;
         if (typeof Swal !== 'undefined') {
             const result = await Swal.fire({
@@ -410,7 +415,11 @@ export class CollabUI {
                             this.showToast('共同編集ルームに参加しました！', 'success');
                         } catch (e) {
                             this.showToast(e.message || '参加に失敗しました', 'error');
+                            this.removeCollabUrlParam();
                         }
+                    } else {
+                        // User canceled / declined invitation
+                        this.removeCollabUrlParam();
                     }
                 }, 600);
             }
@@ -485,5 +494,20 @@ export class CollabUI {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    removeCollabUrlParam() {
+        try {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('collab') || url.searchParams.has('room')) {
+                url.searchParams.delete('collab');
+                url.searchParams.delete('room');
+                const cleanQuery = url.searchParams.toString();
+                const newUrl = url.pathname + (cleanQuery ? `?${cleanQuery}` : '') + url.hash;
+                window.history.replaceState({}, document.title, newUrl);
+            }
+        } catch (e) {
+            console.error('Failed to clean collab URL param:', e);
+        }
     }
 }
