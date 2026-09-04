@@ -204,6 +204,8 @@ export class CollabManager {
 
         // Backup current local workspace so user can restore if disconnected
         try {
+            // Persist to localStorage first
+            window.__edbb_storage?.save?.();
             this.initialLocalBackup = {
                 state: this.workspace ? Blockly.serialization.workspaces.save(this.workspace) : null,
                 title: document.getElementById('projectTitleInput')?.value || '',

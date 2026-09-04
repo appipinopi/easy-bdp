@@ -89,17 +89,21 @@ export class CollabUI {
                 this.showToast('ルームIDを入力してください', 'error');
                 return;
             }
+
+            const shouldJoin = await this.promptJoinConfirmation(roomId);
+            if (!shouldJoin) return;
+
             try {
                 this.elements.joinBtn.disabled = true;
                 this.elements.joinBtn.textContent = '参加中...';
                 await this.manager.joinRoom(roomId);
-                this.showToast('ルームに参加しました！', 'success');
+                this.showToast('共同編集ルームに参加しました！', 'success');
             } catch (err) {
                 this.showToast(err.message || '参加に失敗しました', 'error');
             } finally {
                 if (this.elements.joinBtn) {
                     this.elements.joinBtn.disabled = false;
-                    this.elements.joinBtn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> ルームに参加';
+                    this.elements.joinBtn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> 参加';
                     if (window.lucide) window.lucide.createIcons();
                 }
             }
@@ -173,24 +177,34 @@ export class CollabUI {
         if (typeof Swal !== 'undefined') {
             const result = await Swal.fire({
                 title: '⚠️ ホストとの接続が切断されました',
-                text: 'ホストが退出したか、通信が切断されました。現在の編集内容を維持してローカルで作業を続けますか？それとも破棄して参加前の状態に戻しますか？',
+                html: `
+                    <p class="text-sm text-slate-600 dark:text-slate-300">
+                        共同編集セッションが終了しました。
+                    </p>
+                    <div class="mt-3.5 p-3.5 text-left rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                        <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                            ・<strong>このまま進める</strong>: 共同編集で同期された最新状態を維持して作業を続けます。<br>
+                            ・<strong>参加前のデータに復活</strong>: 参加時に自動保存された<strong>元の作業データに復活（復元）</strong>します。
+                        </p>
+                    </div>
+                `,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#4f46e5',
-                cancelButtonColor: '#ef4444',
+                cancelButtonColor: '#059669',
                 confirmButtonText: 'このまま進める（維持）',
-                cancelButtonText: '破棄して元に戻す',
+                cancelButtonText: '参加前のデータに復活',
                 allowOutsideClick: false,
             });
             shouldKeep = result.isConfirmed;
         } else {
             shouldKeep = window.confirm(
-                'ホストとの接続が切断されました。\n現在の編集内容を維持して進めますか？\n（[キャンセル]で破棄して参加前の状態に戻します）'
+                'ホストとの接続が切断されました。\n\n[OK]: 共同編集の内容を維持してこのまま進める\n[キャンセル]: 参加前の保存データに復活する'
             );
         }
 
         if (shouldKeep) {
-            this.showToast('現在の内容を維持して編集を継続します', 'success');
+            this.showToast('現在の内容を維持してローカル編集を継続します', 'success');
             // Auto save current state
             try {
                 window.__edbb_storage?.save?.();
@@ -198,12 +212,12 @@ export class CollabUI {
         } else {
             const restored = this.manager.restoreInitialBackup();
             if (restored) {
-                this.showToast('参加前の状態に復元しました', 'info');
+                this.showToast('参加前の保存データに復活しました！', 'success');
             } else {
                 try {
                     window.__edbb_storage?.load?.();
                 } catch (e) { }
-                this.showToast('保存済みの状態に戻しました', 'info');
+                this.showToast('参加前の保存データに復活しました！', 'success');
             }
         }
     }
@@ -409,7 +423,21 @@ export class CollabUI {
         if (typeof Swal !== 'undefined') {
             const result = await Swal.fire({
                 title: '👥 共同編集に参加しますか？',
-                text: `ルーム ID: ${roomId} への招待を受け取りました。参加すると現在のワークスペースがルームのデータに同期されます。`,
+                html: `
+                    <p class="text-sm text-slate-600 dark:text-slate-300">
+                        ルーム ID: <code class="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded">${this.escapeHtml(roomId)}</code> への招待です。
+                    </p>
+                    <div class="mt-3.5 p-3.5 text-left rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 shadow-sm">
+                        <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 mb-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>自動バックアップと復元について</span>
+                        </div>
+                        <p class="text-xs text-emerald-900/90 dark:text-emerald-200/90 leading-relaxed">
+                            参加する際、<strong>現在の作業データはローカルに自動保存</strong>されます。<br>
+                            共同編集が切断された場合、<strong>このデータは確実に復活</strong>できます。
+                        </p>
+                    </div>
+                `,
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#4f46e5',
@@ -419,7 +447,9 @@ export class CollabUI {
             });
             return result.isConfirmed;
         }
-        return window.confirm(`共同編集ルーム (${roomId}) に参加しますか？`);
+        return window.confirm(
+            `共同編集ルーム (${roomId}) に参加しますか？\n\n※現在の作業データはローカルに自動保存されます。切断された際にこのデータは復活できます。`
+        );
     }
 
     showToast(message, type = 'info') {
